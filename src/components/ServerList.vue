@@ -77,12 +77,30 @@
             <input v-model="newServer.name" type="text" placeholder="例如: 生产服务器" />
           </div>
           <div class="form-group">
-            <label>主机地址</label>
-            <input v-model="newServer.host" type="text" placeholder="192.168.1.100" />
+            <label>主机地址 <span class="required">*</span></label>
+            <input 
+              v-model="newServer.host" 
+              type="text" 
+              placeholder="192.168.1.100 或 example.com" 
+              :class="{ error: hostError }"
+              @blur="() => validateHost(newServer.host)"
+              @input="hostError = ''"
+            />
+            <span v-if="hostError" class="error-message">{{ hostError }}</span>
           </div>
           <div class="form-group">
             <label>端口</label>
-            <input v-model.number="newServer.port" type="number" placeholder="22" />
+            <input 
+              v-model.number="newServer.port" 
+              type="number" 
+              placeholder="22" 
+              min="1"
+              max="65535"
+              :class="{ error: portError }"
+              @blur="() => validatePort(newServer.port)"
+              @input="portError = ''"
+            />
+            <span v-if="portError" class="error-message">{{ portError }}</span>
           </div>
           <div class="form-group">
             <label>用户名</label>
@@ -142,6 +160,57 @@ const newServer = ref({
   password: ''
 })
 
+const hostError = ref('')
+const portError = ref('')
+
+// 验证主机地址格式
+function validateHost(host) {
+  if (!host || host.trim() === '') {
+    hostError.value = '主机地址不能为空'
+    return false
+  }
+  
+  const trimmedHost = host.trim()
+  
+  // IPv4 地址格式校验
+  const ipv4Regex = /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/
+  
+  // 域名格式校验（支持子域名）
+  const domainRegex = /^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$|^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$/
+  
+  // 支持 localhost
+  if (trimmedHost === 'localhost') {
+    hostError.value = ''
+    return true
+  }
+  
+  // 校验 IPv4 或域名
+  if (ipv4Regex.test(trimmedHost) || domainRegex.test(trimmedHost)) {
+    hostError.value = ''
+    return true
+  } else {
+    hostError.value = '请输入有效的IP地址或域名（例如: 192.168.1.100 或 example.com）'
+    return false
+  }
+}
+
+// 验证端口范围
+function validatePort(port) {
+  if (!port || port === '') {
+    portError.value = '端口不能为空'
+    return false
+  }
+  
+  const portNum = Number(port)
+  if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+    portError.value = '端口必须在 1-65535 之间'
+    return false
+  }
+  
+  portError.value = ''
+  return true
+}
+
 function selectServer(serverId) {
   store.activeServerId = serverId
   const server = store.servers.find(s => s.id === serverId)
@@ -169,11 +238,32 @@ function handleDelete(serverId) {
 }
 
 function handleAddServer() {
-  if (!newServer.value.host || !newServer.value.username) {
-    alert('请填写主机地址和用户名')
+  // 清除之前的错误信息
+  hostError.value = ''
+  portError.value = ''
+  
+  // 验证主机地址
+  if (!validateHost(newServer.value.host)) {
     return
   }
-  store.addServer(newServer.value)
+  
+  // 验证端口
+  if (!validatePort(newServer.value.port)) {
+    return
+  }
+  
+  // 验证用户名
+  if (!newServer.value.username || newServer.value.username.trim() === '') {
+    alert('请填写用户名')
+    return
+  }
+  
+  // 添加服务器
+  store.addServer({
+    ...newServer.value,
+    host: newServer.value.host.trim()
+  })
+  
   // 重置表单
   newServer.value = {
     name: '',
@@ -182,6 +272,8 @@ function handleAddServer() {
     username: '',
     password: ''
   }
+  hostError.value = ''
+  portError.value = ''
   showAddDialog.value = false
 }
 </script>
@@ -450,6 +542,21 @@ function handleAddServer() {
 
 .form-group input {
   width: 100%;
+}
+
+.form-group input.error {
+  border-color: var(--error-color);
+}
+
+.error-message {
+  display: block;
+  font-size: 11px;
+  color: var(--error-color);
+  margin-top: 4px;
+}
+
+.required {
+  color: var(--error-color);
 }
 
 .dialog-footer {
