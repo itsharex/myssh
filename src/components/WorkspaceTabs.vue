@@ -131,6 +131,7 @@ import TerminalTab from './TerminalTab.vue'
 import FileManagerTab from './FileManagerTab.vue'
 import MonitorTab from './MonitorTab.vue'
 import AIChatTab from './AIChatTab.vue'
+import { registerShortcut } from '@/utils/shortcuts'
 
 const store = useServerStore()
 
@@ -639,6 +640,19 @@ let resizeHandler = null
 onMounted(() => {
   // 从 localStorage 恢复尺寸
   loadServerSizes()
+  
+  // 注册全局快捷键
+  // Ctrl/Cmd + W: 关闭当前服务器标签页
+  registerShortcut('w', () => {
+    if (activeServerId.value) {
+      closeServerTab(activeServerId.value)
+    }
+  }, { ctrl: true })
+  
+  // Ctrl/Cmd + F: 聚焦到搜索框（在文件管理器中）
+  registerShortcut('f', () => {
+    // 这个功能需要在 FileManagerTab 中实现
+  }, { ctrl: true })
   
   // 监听窗口大小变化
   resizeHandler = () => {

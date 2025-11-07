@@ -105,11 +105,22 @@
         <p>请先连接服务器以使用AI助手</p>
       </div>
     </div>
+
+    <!-- 清空确认对话框 -->
+    <ConfirmDialog
+      v-model:visible="showClearConfirm"
+      title="清空对话"
+      message="确定要清空所有对话记录吗？"
+      confirm-text="清空"
+      @confirm="confirmClear"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
+import ConfirmDialog from './ConfirmDialog.vue'
+import { success } from '@/utils/toast'
 
 const props = defineProps({
   server: {
@@ -121,6 +132,8 @@ const props = defineProps({
     default: null
   }
 })
+
+const showClearConfirm = ref(false)
 
 const messages = ref([])
 const inputText = ref('')
@@ -264,9 +277,12 @@ function handleNewLine() {
 
 // 清空对话
 function clearChat() {
-  if (confirm('确定要清空所有对话记录吗？')) {
-    messages.value = []
-  }
+  showClearConfirm.value = true
+}
+
+function confirmClear() {
+  messages.value = []
+  success('对话已清空')
 }
 
 // 插入快捷操作

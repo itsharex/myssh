@@ -14,10 +14,11 @@
       </div>
       <div class="file-actions">
         <input
+          ref="searchInputRef"
           v-model="searchText"
           @input="handleSearch"
           class="search-input"
-          placeholder="搜索文件..."
+          placeholder="搜索文件... (Ctrl+F)"
         />
         <button @click="handleUpload" class="action-btn" title="上传文件">📤 上传</button>
         <button @click="handleDownload" class="action-btn" title="下载文件">📥 下载</button>
@@ -90,7 +91,8 @@
           <div class="file-col date">{{ formatDate(file.modified) }}</div>
         </div>
       </div>
-      <div v-else-if="loading" class="empty-files">
+      <div v-else-if="loading" class="empty-files loading">
+        <div class="loading-spinner"></div>
         <p>加载中...</p>
       </div>
       <div v-else-if="error" class="empty-files error">
@@ -214,6 +216,16 @@
         </div>
       </div>
     </div>
+
+    <!-- 删除确认对话框 -->
+    <ConfirmDialog
+      v-model:visible="showDeleteConfirm"
+      title="删除文件"
+      :message="deleteConfirmMessage"
+      confirm-text="删除"
+      type="danger"
+      @confirm="confirmDelete"
+    />
   </div>
 </template>
 
@@ -223,6 +235,8 @@ import { invoke } from '@tauri-apps/api/tauri'
 import { open, save as saveFile } from '@tauri-apps/api/dialog'
 import FilePreview from './FilePreview.vue'
 import FileCompare from './FileCompare.vue'
+import ConfirmDialog from './ConfirmDialog.vue'
+import { error as showError, success, warning, info } from '@/utils/toast'
 
 const props = defineProps({
   tab: Object,
@@ -247,6 +261,14 @@ const chmodBits = ref({
   group: { read: false, write: false, execute: false },
   others: { read: false, write: false, execute: false }
 })
+
+// 删除确认对话框
+const showDeleteConfirm = ref(false)
+const deleteConfirmMessage = ref('')
+const pendingDeleteFiles = ref([])
+
+// 搜索框引用（用于快捷键聚焦）
+const searchInputRef = ref(null)
 const renameInput = ref(null)
 
 // 过滤后的文件列表
@@ -501,7 +523,7 @@ function handleContextCompare() {
   if (contextMenu.value.file) {
     compareFiles.value.left = contextMenu.value.file
     // 提示选择第二个文件
-    alert('请选择要对比的第二个文件')
+    info('请选择要对比的第二个文件')
   }
   closeContextMenu()
 }
@@ -533,7 +555,7 @@ function handleRename() {
       handleRenameFile(file)
     }
   } else {
-    alert('请选择一个文件进行重命名')
+    warning('请选择一个文件进行重命名')
   }
 }
 
@@ -575,15 +597,16 @@ async function confirmRename(file) {
     // })
     
     console.log('重命名文件:', oldPath, '->', newPath)
-    alert(`准备重命名: ${oldPath} -> ${newPath}\n（将调用 Tauri 实现）`)
+    info(`准备重命名: ${oldPath} -> ${newPath}\n（将调用 Tauri 实现）`)
     
     file.name = file.newName.trim()
+    success('文件重命名成功')
     file.path = newPath
     file.editing = false
     await loadFiles()
   } catch (err) {
     error.value = err.message || '重命名失败'
-    alert('重命名失败: ' + error.value)
+    showError('重命名失败: ' + error.value)
     cancelRename(file)
   } finally {
     loading.value = false
@@ -606,7 +629,7 @@ function handleChmod() {
       handleChmodFile(file)
     }
   } else {
-    alert('请选择一个文件进行权限设置')
+    warning('请选择一个文件进行权限设置')
   }
 }
 
@@ -667,12 +690,13 @@ watch(chmodValue, (newValue) => {
 
 async function confirmChmod() {
   if (!chmodFile.value || !/^[0-7]{3}$/.test(chmodValue.value)) {
-    alert('请输入有效的权限值（三位八进制数，如：755）')
+    showError('请输入有效的权限值（三位八进制数，如：755）')
     return
   }
   
   try {
     loading.value = true
+    error.value = null
     const filePath = chmodFile.value.path || (currentPath.value.endsWith('/') ? currentPath.value + chmodFile.value.name : currentPath.value + '/' + chmodFile.value.name)
     
     // TODO: 调用 Tauri 设置文件权限
@@ -683,14 +707,15 @@ async function confirmChmod() {
     // })
     
     console.log('设置文件权限:', filePath, '->', chmodValue.value)
-    alert(`准备设置权限: ${filePath} -> ${chmodValue.value}\n（将调用 Tauri 实现）`)
+    info(`准备设置权限: ${filePath} -> ${chmodValue.value}\n（将调用 Tauri 实现）`)
     
     chmodFile.value.permissions = chmodValue.value
+    success('权限设置成功')
     showChmodDialog.value = false
     await loadFiles()
   } catch (err) {
     error.value = err.message || '设置权限失败'
-    alert('设置权限失败: ' + error.value)
+    showError('设置权限失败: ' + error.value)
   } finally {
     loading.value = false
   }
@@ -740,7 +765,7 @@ function handleRefresh() {
 
 async function uploadFiles(filePaths) {
   if (!props.server.connected) {
-    alert('请先连接服务器')
+    showError('请先连接服务器')
     return
   }
 
@@ -770,13 +795,14 @@ async function uploadFiles(filePaths) {
 
     // 临时提示，实际应该调用 Tauri
     console.log('上传文件:', filePaths, '到:', currentPath.value)
-    alert(`准备上传 ${filePaths.length} 个文件到 ${currentPath.value}\n（将调用 Tauri 实现）`)
+    info(`准备上传 ${filePaths.length} 个文件到 ${currentPath.value}\n（将调用 Tauri 实现）`)
 
     // 上传成功后刷新文件列表
+    success(`成功上传 ${filePaths.length} 个文件`)
     await loadFiles()
   } catch (err) {
     error.value = err.message || '文件上传失败'
-    alert('上传失败: ' + error.value)
+    showError('上传失败: ' + error.value)
     console.error('文件上传失败:', err)
   } finally {
     loading.value = false
@@ -823,7 +849,7 @@ async function handleDrop(event) {
   // TODO: 在 Tauri 中，需要将 File 对象转换为路径
   // 可能需要使用 Tauri 的文件系统 API 或拖拽 API
   // 这里先提示用户使用上传按钮
-  alert('拖拽上传功能需要 Tauri 支持\n请使用"上传"按钮选择文件')
+  info('拖拽上传功能需要 Tauri 支持\n请使用"上传"按钮选择文件')
   
   // 实际实现应该是：
   // const filePaths = []
@@ -837,12 +863,12 @@ async function handleDrop(event) {
 
 async function handleDownload() {
   if (selectedFiles.value.length === 0) {
-    alert('请先选择要下载的文件')
+    warning('请先选择要下载的文件')
     return
   }
-
+  
   if (!props.server.connected) {
-    alert('请先连接服务器')
+    showError('请先连接服务器')
     return
   }
 
@@ -902,13 +928,14 @@ async function handleDownload() {
 
     // 临时提示，实际应该调用 Tauri
     console.log('下载文件:', selectedFiles.value, '到:', savePath)
-    alert(`准备下载 ${selectedFiles.value.length} 个文件到 ${savePath}\n（将调用 Tauri 实现）`)
+    info(`准备下载 ${selectedFiles.value.length} 个文件到 ${savePath}\n（将调用 Tauri 实现）`)
 
     // 下载成功后清空选择
+    success(`成功下载 ${selectedFiles.value.length} 个文件`)
     selectedFiles.value = []
   } catch (err) {
     error.value = err.message || '文件下载失败'
-    alert('下载失败: ' + error.value)
+    showError('下载失败: ' + error.value)
     console.error('文件下载失败:', err)
   } finally {
     loading.value = false
@@ -917,10 +944,11 @@ async function handleDownload() {
 
 async function handleNewFolder() {
   if (!props.server.connected) {
-    alert('请先连接服务器')
+    showError('请先连接服务器')
     return
   }
 
+  // 使用简单的输入对话框（可以后续改为自定义对话框）
   const name = prompt('请输入文件夹名称:')
   if (!name || !name.trim()) {
     return
@@ -948,13 +976,14 @@ async function handleNewFolder() {
 
     // 临时提示，实际应该调用 Tauri
     console.log('创建文件夹:', folderPath)
-    alert(`准备创建文件夹: ${folderPath}\n（将调用 Tauri 实现）`)
+    info(`准备创建文件夹: ${folderPath}\n（将调用 Tauri 实现）`)
 
     // 创建成功后刷新文件列表
+    success('文件夹创建成功')
     await loadFiles()
   } catch (err) {
     error.value = err.message || '创建文件夹失败'
-    alert('创建失败: ' + error.value)
+    showError('创建失败: ' + error.value)
     console.error('创建文件夹失败:', err)
   } finally {
     loading.value = false
@@ -963,18 +992,28 @@ async function handleNewFolder() {
 
 async function handleDelete() {
   if (selectedFiles.value.length === 0) {
-    alert('请先选择要删除的文件')
+    warning('请先选择要删除的文件')
     return
   }
-
+  
   if (!props.server.connected) {
-    alert('请先连接服务器')
+    showError('请先连接服务器')
     return
   }
+  
+  // 显示确认对话框
+  pendingDeleteFiles.value = [...selectedFiles.value]
+  deleteConfirmMessage.value = `确定要删除选中的 ${selectedFiles.value.length} 个文件/文件夹吗？\n此操作不可恢复！`
+  showDeleteConfirm.value = true
+}
 
-  if (!confirm(`确定要删除选中的 ${selectedFiles.value.length} 个文件/文件夹吗？\n此操作不可恢复！`)) {
-    return
-  }
+function confirmDelete() {
+  if (pendingDeleteFiles.value.length === 0) return
+  
+  performDelete()
+}
+
+async function performDelete() {
 
   try {
     loading.value = true
@@ -993,15 +1032,17 @@ async function handleDelete() {
     // })
 
     // 临时提示，实际应该调用 Tauri
-    console.log('删除文件:', selectedFiles.value)
-    alert(`准备删除 ${selectedFiles.value.length} 个文件\n（将调用 Tauri 实现）`)
+    console.log('删除文件:', pendingDeleteFiles.value)
+    info(`准备删除 ${pendingDeleteFiles.value.length} 个文件\n（将调用 Tauri 实现）`)
 
     // 删除成功后刷新文件列表
+    success(`成功删除 ${pendingDeleteFiles.value.length} 个文件`)
     selectedFiles.value = []
     await loadFiles()
   } catch (err) {
     error.value = err.message || '删除文件失败'
-    alert('删除失败: ' + error.value)
+    showError('删除失败: ' + error.value)
+    pendingDeleteFiles.value = []
     console.error('删除文件失败:', err)
   } finally {
     loading.value = false
@@ -1346,6 +1387,25 @@ async function handleDelete() {
   height: 100%;
   color: var(--text-secondary);
   gap: 12px;
+}
+
+.empty-files.loading {
+  gap: 12px;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--bg-tertiary);
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .empty-files.error {

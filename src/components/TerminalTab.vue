@@ -134,6 +134,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { invoke } from '@tauri-apps/api/tauri'
 import TerminalPane from './TerminalPane.vue'
+import { info } from '@/utils/toast'
 
 const props = defineProps({
   tab: Object,
@@ -286,7 +287,7 @@ async function playRecording(recording) {
   //   serverId: props.server.id, 
   //   recording: recording 
   // })
-  alert(`回放录制: ${recording.name}\n（将调用 Tauri 实现）`)
+  info(`回放录制: ${recording.name}\n（将调用 Tauri 实现）`)
 }
 
 function formatDate(timestamp) {
@@ -300,7 +301,7 @@ function handleClear() {
 function handleReconnect() {
   // TODO: 调用 Tauri 重连逻辑
   // await invoke('reconnect_terminal', { serverId: props.server.id })
-  alert('重连功能待实现')
+  info('重连功能待实现')
 }
 
 // 暴露方法供父组件调用

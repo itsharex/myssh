@@ -39,11 +39,23 @@
         <span class="log-level" :class="line.level">{{ line.level }}</span>
         <span class="log-message">{{ highlightSearch(line.message) }}</span>
       </div>
-      <div v-if="loading" class="log-loading">加载中...</div>
+      <div v-if="loading" class="log-loading">
+        <div class="loading-spinner"></div>
+        <span>加载中...</span>
+      </div>
       <div v-if="filteredLines.length === 0 && !loading" class="log-empty">
         暂无日志
       </div>
     </div>
+
+    <!-- 清空确认对话框 -->
+    <ConfirmDialog
+      v-model:visible="showClearConfirm"
+      title="清空日志"
+      message="确定要清空当前日志吗？"
+      confirm-text="清空"
+      @confirm="confirmClear"
+    />
   </div>
 </template>
 
@@ -51,10 +63,14 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { invoke } from '@tauri-apps/api/tauri'
 import { open, save as saveFile } from '@tauri-apps/api/dialog'
+import ConfirmDialog from './ConfirmDialog.vue'
+import { error, success, info } from '@/utils/toast'
 
 const props = defineProps({
   server: Object
 })
+
+const showClearConfirm = ref(false)
 
 const openLogFiles = ref([])
 const activeLogId = ref(null)
@@ -235,15 +251,18 @@ function scrollToBottom() {
 
 // 清空日志
 function clearLog() {
-  if (confirm('确定要清空当前日志吗？')) {
-    logLines.value = []
-  }
+  showClearConfirm.value = true
+}
+
+function confirmClear() {
+  logLines.value = []
+  success('日志已清空')
 }
 
 // 导出日志
 async function exportLog() {
   if (!activeLog.value) {
-    alert('请先选择日志文件')
+    error('请先选择日志文件')
     return
   }
   
@@ -262,7 +281,7 @@ async function exportLog() {
     //   localPath: savePath
     // })
     
-    alert(`日志已导出到: ${savePath}`)
+    success(`日志已导出到: ${savePath}`)
   } catch (error) {
     console.error('导出日志失败:', error)
   }
@@ -468,7 +487,31 @@ onUnmounted(() => {
   padding: 0 2px;
 }
 
-.log-loading,
+.log-loading {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.log-loading .loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--bg-tertiary);
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .log-empty {
   text-align: center;
   padding: 40px;

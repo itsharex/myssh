@@ -65,32 +65,41 @@
     </div>
 
     <!-- 添加服务器对话框 -->
-    <div v-if="showAddDialog" class="dialog-overlay" @click.self="showAddDialog = false">
-      <div class="dialog">
+    <div v-if="showAddDialog" class="dialog-overlay" @click.self="closeDialog">
+      <div class="dialog" @keydown.esc="closeDialog" @keydown.enter.prevent="handleAddServer">
         <div class="dialog-header">
           <h3>添加服务器</h3>
-          <button @click="showAddDialog = false" class="close-btn">×</button>
+          <button @click="closeDialog" class="close-btn">×</button>
         </div>
         <div class="dialog-body">
           <div class="form-group">
             <label>服务器名称</label>
-            <input v-model="newServer.name" type="text" placeholder="例如: 生产服务器" />
+            <input 
+              ref="nameInputRef"
+              v-model="newServer.name" 
+              type="text" 
+              placeholder="例如: 生产服务器"
+              @keydown.enter.prevent="hostInputRef?.focus()"
+            />
           </div>
           <div class="form-group">
             <label>主机地址 <span class="required">*</span></label>
             <input 
+              ref="hostInputRef"
               v-model="newServer.host" 
               type="text" 
               placeholder="192.168.1.100 或 example.com" 
               :class="{ error: hostError }"
               @blur="() => validateHost(newServer.host)"
               @input="hostError = ''"
+              @keydown.enter.prevent="portInputRef?.focus()"
             />
             <span v-if="hostError" class="error-message">{{ hostError }}</span>
           </div>
           <div class="form-group">
             <label>端口</label>
             <input 
+              ref="portInputRef"
               v-model.number="newServer.port" 
               type="number" 
               placeholder="22" 
@@ -99,36 +108,94 @@
               :class="{ error: portError }"
               @blur="() => validatePort(newServer.port)"
               @input="portError = ''"
+              @keydown.enter.prevent="usernameInputRef?.focus()"
             />
             <span v-if="portError" class="error-message">{{ portError }}</span>
           </div>
           <div class="form-group">
-            <label>用户名</label>
-            <input v-model="newServer.username" type="text" placeholder="root" />
+            <label>用户名 <span class="required">*</span></label>
+            <input 
+              ref="usernameInputRef"
+              v-model="newServer.username" 
+              type="text" 
+              placeholder="root"
+              @keydown.enter.prevent="passwordInputRef?.focus()"
+            />
           </div>
           <div class="form-group">
             <label>密码</label>
-            <input v-model="newServer.password" type="password" placeholder="密码或密钥路径" />
+            <input 
+              ref="passwordInputRef"
+              v-model="newServer.password" 
+              type="password" 
+              placeholder="密码或密钥路径"
+              @keydown.enter.prevent="handleAddServer"
+            />
           </div>
         </div>
         <div class="dialog-footer">
-          <button @click="showAddDialog = false">取消</button>
+          <button @click="closeDialog">取消</button>
           <button @click="handleAddServer" class="primary">添加</button>
         </div>
       </div>
     </div>
+
+    <!-- 确认删除对话框 -->
+    <ConfirmDialog
+      v-model:visible="showDeleteConfirm"
+      title="删除服务器"
+      :message="deleteConfirmMessage"
+      confirm-text="删除"
+      type="danger"
+      @confirm="confirmDelete"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useServerStore } from '@/stores/serverStore'
+import ConfirmDialog from './ConfirmDialog.vue'
+import { error, success } from '@/utils/toast'
+import { registerShortcut } from '@/utils/shortcuts'
 
 const store = useServerStore()
 const servers = computed(() => store.servers)
 const activeServerId = computed(() => store.activeServerId)
 const showAddDialog = ref(false)
 const isCollapsed = ref(false)
+
+// 删除确认对话框
+const showDeleteConfirm = ref(false)
+const deleteConfirmMessage = ref('')
+const pendingDeleteServerId = ref(null)
+
+// 输入框引用
+const nameInputRef = ref(null)
+const hostInputRef = ref(null)
+const portInputRef = ref(null)
+const usernameInputRef = ref(null)
+const passwordInputRef = ref(null)
+
+// 注册全局快捷键
+registerShortcut('n', () => {
+  if (!showAddDialog.value) {
+    showAddDialog.value = true
+  }
+}, { ctrl: true })
+
+// 监听对话框打开，自动聚焦第一个输入框
+watch(showAddDialog, async (visible) => {
+  if (visible) {
+    await nextTick()
+    // 优先聚焦主机地址（必填项）
+    if (hostInputRef.value) {
+      hostInputRef.value.focus()
+    } else if (nameInputRef.value) {
+      nameInputRef.value.focus()
+    }
+  }
+})
 
 // 从 localStorage 加载收起状态
 const loadCollapseState = () => {
@@ -231,9 +298,27 @@ async function handleDisconnect(serverId) {
   await store.disconnectServer(serverId)
 }
 
+function closeDialog() {
+  showAddDialog.value = false
+  // 清除错误信息
+  hostError.value = ''
+  portError.value = ''
+}
+
 function handleDelete(serverId) {
-  if (confirm('确定要删除这个服务器吗？')) {
-    store.removeServer(serverId)
+  const server = store.servers.find(s => s.id === serverId)
+  if (server) {
+    pendingDeleteServerId.value = serverId
+    deleteConfirmMessage.value = `确定要删除服务器 "${server.name || server.host}" 吗？\n此操作不可恢复！`
+    showDeleteConfirm.value = true
+  }
+}
+
+function confirmDelete() {
+  if (pendingDeleteServerId.value) {
+    store.removeServer(pendingDeleteServerId.value)
+    success('服务器已删除')
+    pendingDeleteServerId.value = null
   }
 }
 
@@ -244,25 +329,31 @@ function handleAddServer() {
   
   // 验证主机地址
   if (!validateHost(newServer.value.host)) {
+    hostInputRef.value?.focus()
     return
   }
   
   // 验证端口
   if (!validatePort(newServer.value.port)) {
+    portInputRef.value?.focus()
     return
   }
   
   // 验证用户名
   if (!newServer.value.username || newServer.value.username.trim() === '') {
-    alert('请填写用户名')
+    error('请填写用户名')
+    usernameInputRef.value?.focus()
     return
   }
   
   // 添加服务器
   store.addServer({
     ...newServer.value,
-    host: newServer.value.host.trim()
+    host: newServer.value.host.trim(),
+    username: newServer.value.username.trim()
   })
+  
+  success('服务器已添加')
   
   // 重置表单
   newServer.value = {
