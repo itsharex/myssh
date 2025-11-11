@@ -386,13 +386,50 @@ function selectServer(serverId) {
 }
 
 async function handleConnect(serverId) {
-  await store.connectServer(serverId)
-  // 连接成功后，工作区会自动显示该服务器的工作区
-  // 不需要手动创建标签页，因为工作区会显示所有连接的服务器
+  // 获取服务器信息
+  const server = servers.value.find(s => s.id === serverId)
+  const serverName = server ? (server.name || `${server.host}:${server.port}`) : '未知服务器'
+  
+  try {
+    await store.connectServer(serverId)
+    success(`${serverName} 连接成功`)
+    // 连接成功后，工作区会自动显示该服务器的工作区
+    // 不需要手动创建标签页，因为工作区会显示所有连接的服务器
+  } catch (err) {
+    // 提取错误信息
+    let errorMessage = '连接失败'
+    if (err instanceof Error) {
+      errorMessage = err.message || errorMessage
+    } else if (typeof err === 'string') {
+      errorMessage = err
+    } else if (err?.message) {
+      errorMessage = err.message
+    }
+    error(`${serverName}: ${errorMessage}`)
+    console.error('连接服务器失败:', err)
+  }
 }
 
 async function handleDisconnect(serverId) {
-  await store.disconnectServer(serverId)
+  // 获取服务器信息
+  const server = servers.value.find(s => s.id === serverId)
+  const serverName = server ? (server.name || `${server.host}:${server.port}`) : '未知服务器'
+  
+  try {
+    await store.disconnectServer(serverId)
+    success(`${serverName} 已断开连接`)
+  } catch (err) {
+    let errorMessage = '断开连接失败'
+    if (err instanceof Error) {
+      errorMessage = err.message || errorMessage
+    } else if (typeof err === 'string') {
+      errorMessage = err
+    } else if (err?.message) {
+      errorMessage = err.message
+    }
+    error(`${serverName}: ${errorMessage}`)
+    console.error('断开服务器失败:', err)
+  }
 }
 
 function closeDialog() {
@@ -411,11 +448,28 @@ function handleDelete(serverId) {
   }
 }
 
-function confirmDelete() {
+async function confirmDelete() {
   if (pendingDeleteServerId.value) {
-    store.removeServer(pendingDeleteServerId.value)
-    success('服务器已删除')
-    pendingDeleteServerId.value = null
+    const serverId = pendingDeleteServerId.value
+    const server = servers.value.find(s => s.id === serverId)
+    const serverName = server ? (server.name || `${server.host}:${server.port}`) : '未知服务器'
+    
+    try {
+      await store.removeServer(serverId)
+      success(`${serverName} 已删除`)
+      pendingDeleteServerId.value = null
+    } catch (err) {
+      let errorMessage = '删除服务器失败'
+      if (err instanceof Error) {
+        errorMessage = err.message || errorMessage
+      } else if (typeof err === 'string') {
+        errorMessage = err
+      } else if (err?.message) {
+        errorMessage = err.message
+      }
+      error(`${serverName}: ${errorMessage}`)
+      console.error('删除服务器失败:', err)
+    }
   }
 }
 

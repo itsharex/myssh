@@ -299,14 +299,24 @@ function handleClear() {
 }
 
 async function handleReconnect() {
+  const serverName = props.server ? (props.server.name || `${props.server.host}:${props.server.port}`) : '未知服务器'
+  
   try {
     // 调用 Tauri API 重连终端
     const { reconnectTerminal } = await import('@/api/ssh')
     await reconnectTerminal(props.server.id)
-    success('重连成功')
+    success(`${serverName} 重连成功`)
   } catch (err) {
     console.error('重连失败:', err)
-    showError('重连失败: ' + (err.message || '未知错误'))
+    let errorMessage = '重连失败'
+    if (err instanceof Error) {
+      errorMessage = err.message || errorMessage
+    } else if (typeof err === 'string') {
+      errorMessage = err
+    } else if (err?.message) {
+      errorMessage = err.message
+    }
+    showError(`${serverName}: ${errorMessage}`)
   }
 }
 

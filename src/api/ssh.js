@@ -30,7 +30,16 @@ export async function connectSshServer(params) {
     return result
   } catch (error) {
     console.error('连接SSH服务器失败:', error)
-    throw new Error(error.message || '连接服务器失败')
+    // Tauri 错误可能是字符串或对象
+    let errorMessage = '连接服务器失败'
+    if (typeof error === 'string') {
+      errorMessage = error
+    } else if (error?.message) {
+      errorMessage = error.message
+    } else if (error?.toString) {
+      errorMessage = error.toString()
+    }
+    throw new Error(errorMessage)
   }
 }
 
@@ -49,7 +58,15 @@ export async function disconnectSshServer(serverId) {
     return result
   } catch (error) {
     console.error('断开SSH服务器连接失败:', error)
-    throw new Error(error.message || '断开连接失败')
+    let errorMessage = '断开连接失败'
+    if (typeof error === 'string') {
+      errorMessage = error
+    } else if (error?.message) {
+      errorMessage = error.message
+    } else if (error?.toString) {
+      errorMessage = error.toString()
+    }
+    throw new Error(errorMessage)
   }
 }
 
@@ -58,20 +75,30 @@ export async function disconnectSshServer(serverId) {
  * @param {Object} params - 命令参数
  * @param {string} params.serverId - 服务器ID
  * @param {string} params.command - 要执行的命令
- * @returns {Promise<{output: string, exitCode: number}>}
+ * @param {string} [params.currentDir] - 当前工作目录（可选）
+ * @returns {Promise<{output: string, exitCode: number, isInteractive: boolean, interactiveMessage?: string, newDir?: string, outputLines: string[]}>}
  */
 export async function executeSshCommand(params) {
   try {
     const result = await invoke('execute_ssh_command', {
       params: {
         server_id: params.serverId,
-        command: params.command
+        command: params.command,
+        current_dir: params.currentDir || null
       }
     })
     return result
   } catch (error) {
     console.error('执行SSH命令失败:', error)
-    throw new Error(error.message || '执行命令失败')
+    let errorMessage = '执行命令失败'
+    if (typeof error === 'string') {
+      errorMessage = error
+    } else if (error?.message) {
+      errorMessage = error.message
+    } else if (error?.toString) {
+      errorMessage = error.toString()
+    }
+    throw new Error(errorMessage)
   }
 }
 
@@ -90,7 +117,47 @@ export async function reconnectTerminal(serverId) {
     return result
   } catch (error) {
     console.error('重连终端失败:', error)
-    throw new Error(error.message || '重连失败')
+    let errorMessage = '重连失败'
+    if (typeof error === 'string') {
+      errorMessage = error
+    } else if (error?.message) {
+      errorMessage = error.message
+    } else if (error?.toString) {
+      errorMessage = error.toString()
+    }
+    throw new Error(errorMessage)
+  }
+}
+
+/**
+ * 命令补全
+ * @param {Object} params - 补全参数
+ * @param {string} params.serverId - 服务器ID
+ * @param {string} params.input - 完整的输入字符串
+ * @param {string} params.currentDir - 当前工作目录
+ * @returns {Promise<{completedInput?: string, matches: string[], shouldShowMatches: boolean}>}
+ */
+export async function completeCommand(params) {
+  try {
+    const result = await invoke('complete_command', {
+      params: {
+        server_id: params.serverId,
+        input: params.input,
+        current_dir: params.currentDir
+      }
+    })
+    return result
+  } catch (error) {
+    console.error('命令补全失败:', error)
+    let errorMessage = '补全失败'
+    if (typeof error === 'string') {
+      errorMessage = error
+    } else if (error?.message) {
+      errorMessage = error.message
+    } else if (error?.toString) {
+      errorMessage = error.toString()
+    }
+    throw new Error(errorMessage)
   }
 }
 

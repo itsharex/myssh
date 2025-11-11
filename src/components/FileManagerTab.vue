@@ -248,6 +248,25 @@ const files = ref([])
 const selectedFiles = ref([]) // 存储选中文件的完整路径
 const loading = ref(false)
 const error = ref(null)
+
+// 获取服务器名称的辅助函数
+function getServerName() {
+  return props.server ? (props.server.name || `${props.server.host}:${props.server.port}`) : '未知服务器'
+}
+
+// 格式化错误信息的辅助函数
+function formatError(err, defaultMessage) {
+  const serverName = getServerName()
+  let errorMessage = defaultMessage
+  if (err instanceof Error) {
+    errorMessage = err.message || errorMessage
+  } else if (typeof err === 'string') {
+    errorMessage = err
+  } else if (err?.message) {
+    errorMessage = err.message
+  }
+  return `${serverName}: ${errorMessage}`
+}
 const isDragOver = ref(false)
 const searchText = ref('')
 const contextMenu = ref({ show: false, x: 0, y: 0, file: null })
@@ -328,7 +347,7 @@ async function loadFiles() {
       newName: ''
     }))
   } catch (err) {
-    error.value = err.message || '获取文件列表失败'
+    error.value = formatError(err, '获取文件列表失败')
     console.error('加载文件列表失败:', err)
   } finally {
     loading.value = false
@@ -601,8 +620,8 @@ async function confirmRename(file) {
     file.editing = false
     await loadFiles()
   } catch (err) {
-    error.value = err.message || '重命名失败'
-    showError('重命名失败: ' + error.value)
+    error.value = formatError(err, '重命名失败')
+    showError(error.value)
     cancelRename(file)
   } finally {
     loading.value = false
@@ -714,8 +733,8 @@ async function confirmChmod() {
     showChmodDialog.value = false
     await loadFiles()
   } catch (err) {
-    error.value = err.message || '设置权限失败'
-    showError('设置权限失败: ' + error.value)
+    error.value = formatError(err, '设置权限失败')
+    showError(error.value)
   } finally {
     loading.value = false
   }
@@ -800,8 +819,8 @@ async function uploadFiles(filePaths) {
     }
     await loadFiles()
   } catch (err) {
-    error.value = err.message || '文件上传失败'
-    showError('上传失败: ' + error.value)
+    error.value = formatError(err, '文件上传失败')
+    showError(error.value)
     console.error('文件上传失败:', err)
   } finally {
     loading.value = false
@@ -937,8 +956,8 @@ async function handleDownload() {
     }
     selectedFiles.value = []
   } catch (err) {
-    error.value = err.message || '文件下载失败'
-    showError('下载失败: ' + error.value)
+    error.value = formatError(err, '文件下载失败')
+    showError(error.value)
     console.error('文件下载失败:', err)
   } finally {
     loading.value = false
@@ -975,8 +994,8 @@ async function handleNewFolder() {
     success('文件夹创建成功')
     await loadFiles()
   } catch (err) {
-    error.value = err.message || '创建文件夹失败'
-    showError('创建失败: ' + error.value)
+    error.value = formatError(err, '创建文件夹失败')
+    showError(error.value)
     console.error('创建文件夹失败:', err)
   } finally {
     loading.value = false
@@ -1036,8 +1055,8 @@ async function performDelete() {
     selectedFiles.value = []
     await loadFiles()
   } catch (err) {
-    error.value = err.message || '删除文件失败'
-    showError('删除失败: ' + error.value)
+    error.value = formatError(err, '删除文件失败')
+    showError(error.value)
     pendingDeleteFiles.value = []
     console.error('删除文件失败:', err)
   } finally {

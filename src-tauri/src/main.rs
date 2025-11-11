@@ -18,6 +18,7 @@ fn main() {
       ssh::disconnect_ssh_server,
       ssh::execute_ssh_command,
       ssh::reconnect_terminal,
+      ssh::complete_command,
       // 文件管理相关命令
       file::list_remote_directory,
       file::upload_file,
